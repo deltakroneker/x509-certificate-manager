@@ -4,10 +4,25 @@ import code.GuiException;
 import gui.Constants;
 import java.awt.Component;
 import java.awt.Frame;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.math.BigInteger;
+import java.security.InvalidKeyException;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.Security;
 import java.util.Enumeration;
-import java.security.*;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.SignatureException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.Certificate;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateParsingException;
@@ -25,11 +40,13 @@ import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x500.X500NameBuilder;
 import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.asn1.x500.style.IETFUtils;
+import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.asn1.x509.Extensions.*;
+import org.bouncycastle.asn1.x509.GeneralName;
+import org.bouncycastle.asn1.x509.GeneralNames;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
-import org.bouncycastle.asn1.x509.*;
 import static org.bouncycastle.asn1.x509.X509Extensions.IssuerAlternativeName;
 import org.bouncycastle.cert.CertIOException;
 import org.bouncycastle.cert.X509CertificateHolder;
@@ -52,22 +69,25 @@ public class MyCode extends x509.v3.CodeV3 {
 
     public MyCode(boolean[] algorithm_conf, boolean[] extensions_conf, boolean extensions_rules) throws GuiException {
         super(algorithm_conf, extensions_conf, extensions_rules);
+        try {
+            keyStore = KeyStore.getInstance("PKCS12");
+            keyStore.load(null, null);
+            Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+        } catch (Exception ex) {
+        }
     }
 
     @Override
     public Enumeration<String> loadLocalKeystore() {
         Security.addProvider(new BouncyCastleProvider());
         try {
-            this.keyStore = KeyStore.getInstance("PKCS12");
-            keyStore.load(null, null);
-            return (this.keyStore == null) ? null : this.keyStore.aliases();
-        } catch (KeyStoreException ex) {
-        } catch (IOException ex) {
-        } catch (NoSuchAlgorithmException ex) {
-        } catch (CertificateException ex) {
-        } finally {
-            return null;
-        }
+            if (this.keyStore != null)
+                return this.keyStore.aliases();
+            else 
+                return null;
+        } catch (Exception ex) {
+        } 
+        return null;
     }
 
     @Override
@@ -77,7 +97,7 @@ public class MyCode extends x509.v3.CodeV3 {
             while (elements.hasMoreElements()) {
                 this.keyStore.deleteEntry(elements.nextElement());
             }
-        } catch (KeyStoreException ex) {
+        } catch (Exception ex) {
         }
     }
 
@@ -94,19 +114,19 @@ public class MyCode extends x509.v3.CodeV3 {
             String certificateIssuer = ""; 
             if (certificateHolder.getIssuer() != null) {
                 certificateIssuer = certificateHolder.getIssuer().toString();
-                this.access.setIssuer(certificateIssuer);
-                this.access.setIssuerSignatureAlgorithm(certificate.getSigAlgName());
+                super.access.setIssuer(certificateIssuer);
+                super.access.setIssuerSignatureAlgorithm(certificate.getSigAlgName());
             }
             
             // Version
-            this.access.setVersion(2);
+            super.access.setVersion(2);
             
             // Serial number
-            this.access.setSerialNumber(certificate.getSerialNumber().toString());
+            super.access.setSerialNumber(certificate.getSerialNumber().toString());
             
             // Date
-            this.access.setNotBefore(certificate.getNotBefore());
-            this.access.setNotAfter(certificate.getNotAfter());
+            super.access.setNotBefore(certificate.getNotBefore());
+            super.access.setNotAfter(certificate.getNotAfter());
             
             // Names
             X500Name subject = certificateHolder.getSubject();
@@ -115,32 +135,32 @@ public class MyCode extends x509.v3.CodeV3 {
             if (subject.getRDNs(BCStyle.C).length != 0) {
                 RDN countryRDN = subject.getRDNs(BCStyle.C)[0];
                 String subjectCountry = IETFUtils.valueToString(countryRDN.getFirst().getValue());
-                this.access.setSubjectCountry(subjectCountry);
+                super.access.setSubjectCountry(subjectCountry);
             }
             if (subject.getRDNs(BCStyle.ST).length != 0) {
                 RDN stateRDN = subject.getRDNs(BCStyle.ST)[0];
                 String subjectState = IETFUtils.valueToString(stateRDN.getFirst().getValue());
-                this.access.setSubjectState(subjectState);
+                super.access.setSubjectState(subjectState);
             }
             if (subject.getRDNs(BCStyle.L).length != 0) {
                 RDN localityRDN = subject.getRDNs(BCStyle.L)[0];
                 String subjectLocality = IETFUtils.valueToString(localityRDN.getFirst().getValue());
-                this.access.setSubjectLocality(subjectLocality);
+                super.access.setSubjectLocality(subjectLocality);
             }
             if (subject.getRDNs(BCStyle.O).length != 0) {
                 RDN organizationRDN = subject.getRDNs(BCStyle.O)[0];
                 String subjectOrganization = IETFUtils.valueToString(organizationRDN.getFirst().getValue());
-                this.access.setSubjectOrganization(subjectOrganization);
+                super.access.setSubjectOrganization(subjectOrganization);
             }
             if (subject.getRDNs(BCStyle.OU).length != 0) {
                 RDN organizationUnitRDN = subject.getRDNs(BCStyle.OU)[0];
                 String subjectOrganizationUnit = IETFUtils.valueToString(organizationUnitRDN.getFirst().getValue());
-                this.access.setSubjectOrganizationUnit(subjectOrganizationUnit);
+                super.access.setSubjectOrganizationUnit(subjectOrganizationUnit);
             }
             if (subject.getRDNs(BCStyle.CN).length != 0) { 
                 RDN commonNameRDN = subject.getRDNs(BCStyle.CN)[0];
                 String subjectCommonName = IETFUtils.valueToString(commonNameRDN.getFirst().getValue());
-                this.access.setSubjectCommonName(subjectCommonName);
+                super.access.setSubjectCommonName(subjectCommonName);
             }
             
             // Extension critical parameteres
@@ -155,14 +175,14 @@ public class MyCode extends x509.v3.CodeV3 {
                     if(b) atLeastOne = true;
                 
                 if (atLeastOne) 
-                    this.access.setKeyUsage(keyUsage);
+                    super.access.setKeyUsage(keyUsage);
                 
                 if (criticalExtensions.contains(Extension.keyUsage.getId())) 
-                    this.access.setCritical(Constants.KU, true);
+                    super.access.setCritical(Constants.KU, true);
                 else
-                    this.access.setCritical(Constants.KU, false);
+                    super.access.setCritical(Constants.KU, false);
 
-            } catch(Exception e) {
+            } catch(Exception ex) {
             }
             
             // Extension: issuer alternative name
@@ -201,14 +221,14 @@ public class MyCode extends x509.v3.CodeV3 {
                         completeStringOfNames = completeStringOfNames + ", " + alternativeName;
                 }
                 
-                this.access.setAlternativeName(Constants.IAN, completeStringOfNames);
+                super.access.setAlternativeName(Constants.IAN, completeStringOfNames);
                 
                 if (criticalExtensions.contains(Extension.issuerAlternativeName.getId())) 
-                    this.access.setCritical(Constants.IAN, true);
+                    super.access.setCritical(Constants.IAN, true);
                 else
-                    this.access.setCritical(Constants.IAN, false);
+                    super.access.setCritical(Constants.IAN, false);
                 
-            } catch (CertificateParsingException ex) {
+            } catch (Exception ex) {
             }
                             
             // Extension: basic constraints
@@ -216,16 +236,16 @@ public class MyCode extends x509.v3.CodeV3 {
             String pathLengthString = Integer.toString(pathLength);
             
             if (pathLength == -1) {
-                this.access.setCA(false);
+                super.access.setCA(false);
             } else {
-                this.access.setCA(true);
-                this.access.setPathLen(pathLengthString);
+                super.access.setCA(true);
+                super.access.setPathLen(pathLengthString);
             }
             
             if (criticalExtensions.contains(Extension.basicConstraints.getId())) {
-                this.access.setCritical(Constants.BC, true);
+                super.access.setCritical(Constants.BC, true);
             } else {
-                this.access.setCritical(Constants.BC, false);
+                super.access.setCritical(Constants.BC, false);
             }
             
             // Return value
@@ -242,9 +262,8 @@ public class MyCode extends x509.v3.CodeV3 {
             else 
                 return 0;
 
-        } catch (KeyStoreException ex) {
-        } catch (CertificateEncodingException ex) {
-        }
+        } catch (Exception ex) {
+        } 
         
         return -1;
     }
@@ -254,7 +273,7 @@ public class MyCode extends x509.v3.CodeV3 {
         try {
 
             // Version check
-            int version = this.access.getVersion();
+            int version = super.access.getVersion();
             if (version != 2) {
                 Component frame = new Frame();
                 JOptionPane.showMessageDialog(frame, "Only v3 is supported!", "Error", JOptionPane.WARNING_MESSAGE);
@@ -262,15 +281,15 @@ public class MyCode extends x509.v3.CodeV3 {
             }
 
             // Serial number parameter
-            String serNum = this.access.getSerialNumber();
+            String serNum = super.access.getSerialNumber();
             BigInteger serialNumber = new BigInteger(serNum);
 
             // Date parameters
-            Date notBefore = this.access.getNotBefore();
-            Date notAfter = this.access.getNotAfter();
+            Date notBefore = super.access.getNotBefore();
+            Date notAfter = super.access.getNotAfter();
 
             // Key info parameters
-            String keyLength = this.access.getPublicKeyParameter();
+            String keyLength = super.access.getPublicKeyParameter();
             KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("DSA");
             keyPairGenerator.initialize(Integer.parseInt(keyLength));
             KeyPair keyPair = keyPairGenerator.generateKeyPair();
@@ -279,12 +298,12 @@ public class MyCode extends x509.v3.CodeV3 {
             // Name parameter
             X500NameBuilder nameBuilder = new X500NameBuilder(BCStyle.INSTANCE);
             X500Name name;
-            String country = this.access.getSubjectCountry();
-            String state = this.access.getSubjectState();
-            String locality = this.access.getSubjectLocality();
-            String organization = this.access.getSubjectOrganization();
-            String organizationUnit = this.access.getSubjectOrganizationUnit();
-            String commonName = this.access.getSubjectCommonName();
+            String country = super.access.getSubjectCountry();
+            String state = super.access.getSubjectState();
+            String locality = super.access.getSubjectLocality();
+            String organization = super.access.getSubjectOrganization();
+            String organizationUnit = super.access.getSubjectOrganizationUnit();
+            String commonName = super.access.getSubjectCommonName();
             if (!country.isEmpty()) {
                 nameBuilder.addRDN(BCStyle.C, country);
             }
@@ -309,8 +328,8 @@ public class MyCode extends x509.v3.CodeV3 {
             X509v3CertificateBuilder certificateBuilder = new X509v3CertificateBuilder(name, serialNumber, notBefore, notAfter, name, publicKeyInfo);
 
             // Extension: key usage
-            boolean[] keyUsageArray = this.access.getKeyUsage();
-            boolean isKeyUsageCritical = this.access.isCritical(Constants.KU);
+            boolean[] keyUsageArray = super.access.getKeyUsage();
+            boolean isKeyUsageCritical = super.access.isCritical(Constants.KU);
             int keyUsageMask = 0;
             KeyUsage keyUsage;
             
@@ -334,8 +353,8 @@ public class MyCode extends x509.v3.CodeV3 {
             }
             
             // Extension: issuer alternative name
-            boolean isIssuerAlternativeNameCritical = this.access.isCritical(Constants.IAN);
-            String[] names = this.access.getAlternativeName(Constants.IAN);
+            boolean isIssuerAlternativeNameCritical = super.access.isCritical(Constants.IAN);
+            String[] names = super.access.getAlternativeName(Constants.IAN);
             GeneralName[] generalNames = new GeneralName[names.length];
             GeneralNames generalNamesFinal; 
             
@@ -368,9 +387,9 @@ public class MyCode extends x509.v3.CodeV3 {
             }
             
             // Extension: basic constraints
-            boolean isBasicConstraintsCritical = this.access.isCritical(Constants.BC);
-            boolean isCA = this.access.isCA();
-            String pathLength = this.access.getPathLen();
+            boolean isBasicConstraintsCritical = super.access.isCritical(Constants.BC);
+            boolean isCA = super.access.isCA();
+            String pathLength = super.access.getPathLen();
             BasicConstraints basicConstraints;
             
             try {
@@ -384,7 +403,7 @@ public class MyCode extends x509.v3.CodeV3 {
             }
                 
             // Content signer
-            String algorithm = this.access.getPublicKeyDigestAlgorithm();
+            String algorithm = super.access.getPublicKeyDigestAlgorithm();
             ContentSigner contentSigner = new JcaContentSignerBuilder(algorithm).build(keyPair.getPrivate());
 
             // Certificate holder and converter
@@ -407,20 +426,12 @@ public class MyCode extends x509.v3.CodeV3 {
             //      - public key and password to protect it
             //      - chain of certificates to link it with it's private key
 
-            this.keyStore.setKeyEntry(string, keyPair.getPrivate(), null, certificateChain);
+            this.keyStore.setKeyEntry(string, keyPair.getPrivate(), "pass".toCharArray(), certificateChain);
 
             return true;
 
-        } catch (NoSuchAlgorithmException ex) {
-        } catch (IllegalStateException ex) {
-        } catch (OperatorCreationException ex) {
-        } catch (CertificateException ex) {
-        } catch (InvalidKeyException ex) {
-        } catch (NoSuchProviderException ex) {
-        } catch (SignatureException ex) {
-        } catch (KeyStoreException ex) { 
-        } catch (CertIOException ex) {
-        }
+        } catch (Exception ex) {
+        } 
         
         return false;
     }
@@ -437,11 +448,60 @@ public class MyCode extends x509.v3.CodeV3 {
 
     @Override
     public boolean importKeypair(String string, String string1, String string2) {
+        System.out.println(string);
+        System.out.println(string1);
+        System.out.println(string2);
+        
+        try {
+            FileInputStream fis = new FileInputStream(string1);
+            char[] path = string1.toCharArray();
+            
+            if (path[path.length - 1] != '2' && path[path.length - 2] != '1' && path[path.length - 3] != 'p' && path[path.length - 4] != '.') {
+                fis.close();
+                return false;
+            } else {
+                KeyStore local = KeyStore.getInstance("PKCS12");
+                local.load(fis, string2.toCharArray());
+                Certificate[] myChain = local.getCertificateChain(string);
+                this.keyStore.setKeyEntry(string, local.getKey(string, string2.toCharArray()), "pass".toCharArray(), myChain);
+                fis.close();
+            }
+            
+            return true;
+            
+        } catch (Exception ex) {
+        }
         return false;
     }
 
     @Override
     public boolean exportKeypair(String string, String string1, String string2) {
+        System.out.println(string);
+        System.out.println(string1);
+        System.out.println(string2);
+        
+        OutputStream output;
+        File file;
+        char[] path = string1.toCharArray();
+        if (!(path[path.length - 1] == '2' && path[path.length - 2] == '1' && path[path.length - 3] == 'p' && path[path.length - 4] == '.'))
+            string1 = string1 + ".p12";
+        try {
+            file = new File(string1);
+            output = new FileOutputStream(file);
+            
+            KeyStore local = KeyStore.getInstance("PKCS12");
+            local.load(null, null);
+
+            Certificate[] myChain2 = keyStore.getCertificateChain(string);
+            local.setKeyEntry(string, this.keyStore.getKey(string, "pass".toCharArray()), string2.toCharArray(), myChain2);
+            local.store(output, string2.toCharArray());
+
+            output.close();
+            return true;
+            
+        } catch (Exception ex) {
+        } 
+       
         return false;
     }
 
