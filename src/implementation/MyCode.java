@@ -1,15 +1,20 @@
 package implementation;
-
 import code.GuiException;
 import gui.Constants;
 import java.awt.Component;
 import java.awt.Frame;
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.Reader;
+import java.io.Writer;
 import java.math.BigInteger;
 import java.security.InvalidKeyException;
 import java.security.KeyStore;
@@ -20,6 +25,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
+import java.security.PrivateKey;
 import java.security.SignatureException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
@@ -35,6 +41,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JOptionPane;
 import org.bouncycastle.asn1.ASN1Encodable;
+import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.x500.RDN;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x500.X500NameBuilder;
@@ -44,6 +52,7 @@ import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.asn1.x509.Extensions.*;
+import org.bouncycastle.asn1.x509.ExtensionsGenerator;
 import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.GeneralNames;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
@@ -54,9 +63,18 @@ import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.openssl.MiscPEMGenerator;
+import org.bouncycastle.openssl.PEMParser;
+import org.bouncycastle.openssl.PEMWriter;
+import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.bouncycastle.pkcs.PKCS10CertificationRequest;
+import org.bouncycastle.pkcs.PKCS10CertificationRequestBuilder;
+import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder;
+import org.bouncycastle.util.io.pem.PemObjectGenerator;
+import org.bouncycastle.util.io.pem.PemWriter;
 import sun.security.jca.JCAUtil;
 import sun.security.x509.BasicConstraintsExtension;
 import sun.security.x509.EDIPartyName;
@@ -86,8 +104,8 @@ public class MyCode extends x509.v3.CodeV3 {
             else 
                 return null;
         } catch (Exception ex) {
+            return null;
         } 
-        return null;
     }
 
     @Override
@@ -263,9 +281,8 @@ public class MyCode extends x509.v3.CodeV3 {
                 return 0;
 
         } catch (Exception ex) {
+            return -1;
         } 
-        
-        return -1;
     }
 
     @Override
@@ -430,10 +447,9 @@ public class MyCode extends x509.v3.CodeV3 {
 
             return true;
 
-        } catch (Exception ex) {
+        } catch (Exception ex) {        
+            return false;
         } 
-        
-        return false;
     }
 
     @Override
@@ -448,27 +464,21 @@ public class MyCode extends x509.v3.CodeV3 {
 
     @Override
     public boolean importKeypair(String string, String string1, String string2) {
-        System.out.println(string);
-        System.out.println(string1);
-        System.out.println(string2);
-        
         try {
-            FileInputStream fis = new FileInputStream(string1);
-            char[] path = string1.toCharArray();
+            FileInputStream inputStream = new FileInputStream(string1);
+            char[] filePath = string1.toCharArray();
             
-            if (path[path.length - 1] != '2' && path[path.length - 2] != '1' && path[path.length - 3] != 'p' && path[path.length - 4] != '.') {
-                fis.close();
+            if (filePath[filePath.length - 1] != '2' && filePath[filePath.length - 2] != '1' && filePath[filePath.length - 3] != 'p' && filePath[filePath.length - 4] != '.') {
+                inputStream.close();
                 return false;
             } else {
-                KeyStore local = KeyStore.getInstance("PKCS12");
-                local.load(fis, string2.toCharArray());
-                Certificate[] myChain = local.getCertificateChain(string);
-                this.keyStore.setKeyEntry(string, local.getKey(string, string2.toCharArray()), "pass".toCharArray(), myChain);
-                fis.close();
-            }
-            
-            return true;
-            
+                KeyStore tempKeyStore = KeyStore.getInstance("PKCS12");
+                tempKeyStore.load(inputStream, string2.toCharArray());
+                Certificate[] myChain = tempKeyStore.getCertificateChain(string);
+                this.keyStore.setKeyEntry(string, tempKeyStore.getKey(string, string2.toCharArray()), "pass".toCharArray(), myChain);
+                inputStream.close();            
+                return true;
+            }          
         } catch (Exception ex) {
         }
         return false;
@@ -476,27 +486,23 @@ public class MyCode extends x509.v3.CodeV3 {
 
     @Override
     public boolean exportKeypair(String string, String string1, String string2) {
-        System.out.println(string);
-        System.out.println(string1);
-        System.out.println(string2);
-        
-        OutputStream output;
+        OutputStream outputStream;
         File file;
         char[] path = string1.toCharArray();
         if (!(path[path.length - 1] == '2' && path[path.length - 2] == '1' && path[path.length - 3] == 'p' && path[path.length - 4] == '.'))
             string1 = string1 + ".p12";
         try {
             file = new File(string1);
-            output = new FileOutputStream(file);
+            outputStream = new FileOutputStream(file);
             
-            KeyStore local = KeyStore.getInstance("PKCS12");
-            local.load(null, null);
+            KeyStore tempKeyStore = KeyStore.getInstance("PKCS12");
+            tempKeyStore.load(null, null);
 
             Certificate[] myChain2 = keyStore.getCertificateChain(string);
-            local.setKeyEntry(string, this.keyStore.getKey(string, "pass".toCharArray()), string2.toCharArray(), myChain2);
-            local.store(output, string2.toCharArray());
+            tempKeyStore.setKeyEntry(string, this.keyStore.getKey(string, "pass".toCharArray()), string2.toCharArray(), myChain2);
+            tempKeyStore.store(outputStream, string2.toCharArray());
 
-            output.close();
+            outputStream.close();
             return true;
             
         } catch (Exception ex) {
@@ -507,52 +513,177 @@ public class MyCode extends x509.v3.CodeV3 {
 
     @Override
     public boolean importCertificate(String string, String string1) {
+        
+        
         return false;
     }
 
     @Override
     public boolean exportCertificate(String string, String string1, int i, int i1) {
-        return false;
+
+        Certificate certificate;
+        Certificate[] chainOfCertificates;
+        Writer writer;
+        PemWriter PEMWriter;
+        FileOutputStream outputStream;
+        char[] filePath = string.toCharArray();
+        String filePathWithCer = string;
+        
+        try {
+            certificate = this.keyStore.getCertificate(string1);
+            if (!(filePath[filePath.length - 4] == '.' && filePath[filePath.length - 3] == 'c' && filePath[filePath.length - 2] == 'e' && filePath[filePath.length - 1] == 'r'))
+                filePathWithCer += ".cer";
+            writer = new FileWriter(filePathWithCer);
+            
+            if (i == 0) {
+                byte[] buffer = certificate.getEncoded();
+                outputStream = new FileOutputStream(filePathWithCer);
+                outputStream.write(buffer);
+                outputStream.close();
+            } else {
+                PEMWriter = new JcaPEMWriter(writer);
+                if (i1 == 0){
+                    PEMWriter.writeObject((PemObjectGenerator) certificate);
+                } else {
+                    chainOfCertificates = this.keyStore.getCertificateChain(string1);
+                    for (Certificate cert : chainOfCertificates)
+                        PEMWriter.writeObject((PemObjectGenerator) cert);
+                }
+                PEMWriter.flush();
+                PEMWriter.close();
+            }
+            return true;
+        } catch (Exception ex) {
+            return false;
+        }
+
     }
 
     @Override
-    public boolean exportCSR(String string, String string1, String string2) {
-        return false;
+    public boolean exportCSR(String string, String string1, String string2) { 
+        
+        PKCS10CertificationRequest csr;
+        Writer writer;
+        PemWriter PEMWriter;
+        FileOutputStream outputStream;
+        char[] filePath = string.toCharArray();
+        String filePathWithCer = string;
+
+        try {
+            System.out.println(string); // /Users/nikolamilic/Desktop/borcamilic.csr
+            System.out.println(string1);// borca milic
+            System.out.println(string2);// SHA1withDSA
+
+            X509Certificate certificate = (X509Certificate) this.keyStore.getCertificate(string1);
+            JcaX509CertificateHolder holder = new JcaX509CertificateHolder(certificate);
+            X500Name name = holder.getSubject();
+
+            PKCS10CertificationRequestBuilder CSRbuilder = new JcaPKCS10CertificationRequestBuilder(name, certificate.getPublicKey());
+
+            List<ASN1ObjectIdentifier> list = holder.getExtensionOIDs();
+            ExtensionsGenerator gen = new ExtensionsGenerator();
+            for (ASN1ObjectIdentifier object : list) {
+                gen.addExtension(holder.getExtension(object));
+            }
+            CSRbuilder.addAttribute(PKCSObjectIdentifiers.pkcs_9_at_extensionRequest, gen.generate());
+            
+            JcaContentSignerBuilder contentSigner = new JcaContentSignerBuilder(string2);
+            PrivateKey privateKey = (PrivateKey) this.keyStore.getKey(string1, "pass".toCharArray());
+            csr = CSRbuilder.build(contentSigner.build(privateKey));
+                        
+            writer = new FileWriter(filePathWithCer);
+            PEMWriter = new JcaPEMWriter(writer);
+            PemObjectGenerator objGen = new MiscPEMGenerator(csr);
+            PEMWriter.writeObject(objGen);
+            PEMWriter.close();
+            
+
+            return true;
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     @Override
     public String importCSR(String string) {
-        return null;
+        PKCS10CertificationRequest csr;
+        try {
+            FileInputStream inputStream = new FileInputStream(string);
+
+            Reader pemReader = new BufferedReader(new InputStreamReader(inputStream));
+            PEMParser pemParser = new PEMParser(pemReader);
+            Object parsedObj = pemParser.readObject();
+
+            if (parsedObj instanceof PKCS10CertificationRequest) {
+                csr = (PKCS10CertificationRequest) parsedObj;
+
+                X500Name subject = csr.getSubject();
+                return subject.toString();
+            }
+
+
+            return null;
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     @Override
     public boolean signCSR(String string, String string1, String string2) {
+        
         return false;
     }
 
     @Override
     public boolean importCAReply(String string, String string1) {
+        
         return false;
     }
 
     @Override
     public boolean canSign(String string) {
-        return false;
+        try {
+            X509Certificate certificate = (X509Certificate) this.keyStore.getCertificate(string);            
+            int pathLength = certificate.getBasicConstraints();
+            if (pathLength == -1)
+                return false;
+            else
+                return true;      
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     @Override
     public String getSubjectInfo(String string) {
-        return null;
+        try {
+            X509Certificate certificate = (X509Certificate) this.keyStore.getCertificate(string);
+            JcaX509CertificateHolder certificateHolder = new JcaX509CertificateHolder(certificate);
+            X500Name subject = certificateHolder.getSubject();
+            return subject.toString();
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     @Override
     public String getCertPublicKeyAlgorithm(String string) {
-        return null;
+        try {
+            String algorithm = super.access.getPublicKeyAlgorithm();
+            return algorithm;
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     @Override
     public String getCertPublicKeyParameter(String string) {
-        return null;
+        try {
+            String parameter = super.access.getPublicKeyParameter();
+            return parameter;
+        } catch (Exception ex) {
+            return null;
+        }   
     }
 
 }
