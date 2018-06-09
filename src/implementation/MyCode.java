@@ -5,10 +5,12 @@ import java.awt.Component;
 import java.awt.Frame;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -26,6 +28,7 @@ import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.SignatureException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
@@ -35,6 +38,7 @@ import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;
 import java.util.Collection;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
@@ -42,6 +46,7 @@ import java.util.logging.Logger;
 import javax.swing.JOptionPane;
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.pkcs.Attribute;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.x500.RDN;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -50,8 +55,8 @@ import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.asn1.x500.style.IETFUtils;
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.asn1.x509.Extensions;
 import org.bouncycastle.asn1.x509.KeyUsage;
-import org.bouncycastle.asn1.x509.Extensions.*;
 import org.bouncycastle.asn1.x509.ExtensionsGenerator;
 import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.GeneralNames;
@@ -62,6 +67,11 @@ import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
+import org.bouncycastle.cms.CMSProcessableByteArray;
+import org.bouncycastle.cms.CMSSignedData;
+import org.bouncycastle.cms.CMSSignedDataGenerator;
+import org.bouncycastle.cms.CMSTypedData;
+import org.bouncycastle.cms.jcajce.JcaSignerInfoGeneratorBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openssl.MiscPEMGenerator;
 import org.bouncycastle.openssl.PEMParser;
@@ -69,10 +79,13 @@ import org.bouncycastle.openssl.PEMWriter;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.OperatorCreationException;
+import org.bouncycastle.operator.bc.BcDigestCalculatorProvider;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
 import org.bouncycastle.pkcs.PKCS10CertificationRequestBuilder;
 import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder;
+import org.bouncycastle.util.encoders.Base64;
 import org.bouncycastle.util.io.pem.PemObjectGenerator;
 import org.bouncycastle.util.io.pem.PemWriter;
 import sun.security.jca.JCAUtil;
@@ -84,6 +97,8 @@ import x509.v3.GuiV3;
 public class MyCode extends x509.v3.CodeV3 {
 
     private KeyStore keyStore;
+    private String aliasOfCSRIssuer;
+    private PKCS10CertificationRequest currentCSR;
 
     public MyCode(boolean[] algorithm_conf, boolean[] extensions_conf, boolean extensions_rules) throws GuiException {
         super(algorithm_conf, extensions_conf, extensions_rules);
@@ -513,8 +528,46 @@ public class MyCode extends x509.v3.CodeV3 {
 
     @Override
     public boolean importCertificate(String string, String string1) {
-        
-        
+//        
+//        Certificate certificate;
+//        Certificate[] chainOfCertificates;
+//        Reader reader;
+//        PemWriter PEMWriter;
+//        FileInputStream inputStream;
+//        char[] filePath = string.toCharArray();
+//        String filePathWithCer = string;
+//        
+//        try {
+//            certificate = this.keyStore.getCertificate(string1);
+//            if (!(filePath[filePath.length - 4] == '.' && filePath[filePath.length - 3] == 'c' && filePath[filePath.length - 2] == 'e' && filePath[filePath.length - 1] == 'r'))
+//                filePathWithCer += ".cer";
+//            reader = new FileReader(filePathWithCer);
+//            
+//            PEMParser parser = new PEMParser(reader);
+//            Object parsedObj = parser.readObject();
+//            
+//            
+//            if (i == 0) {
+//                byte[] buffer = certificate.getEncoded();
+//                outputStream = new FileOutputStream(filePathWithCer);
+//                outputStream.write(buffer);
+//                outputStream.close();
+//            } else {
+//                PEMWriter = new JcaPEMWriter(writer);
+//                if (i1 == 0){
+//                    PEMWriter.writeObject((PemObjectGenerator) certificate);
+//                } else {
+//                    chainOfCertificates = this.keyStore.getCertificateChain(string1);
+//                    for (Certificate cert : chainOfCertificates)
+//                        PEMWriter.writeObject((PemObjectGenerator) cert);
+//                }
+//                PEMWriter.flush();
+//                PEMWriter.close();
+//            }
+//            return true;
+//        } catch (Exception ex) {
+//            return false;
+//        }
         return false;
     }
 
@@ -616,12 +669,11 @@ public class MyCode extends x509.v3.CodeV3 {
 
             if (parsedObj instanceof PKCS10CertificationRequest) {
                 csr = (PKCS10CertificationRequest) parsedObj;
-
+                this.currentCSR = csr;
                 X500Name subject = csr.getSubject();
                 return subject.toString();
+
             }
-
-
             return null;
         } catch (Exception ex) {
             return null;
@@ -630,14 +682,63 @@ public class MyCode extends x509.v3.CodeV3 {
 
     @Override
     public boolean signCSR(String string, String string1, String string2) {
+        try {       
+            X509Certificate signerCertificate = (X509Certificate) keyStore.getCertificate(string1);
+            X500Name signerName = new JcaX509CertificateHolder(signerCertificate).getSubject();
+            PrivateKey signerPrivateKey = (PrivateKey) this.keyStore.getKey(string1, "pass".toCharArray());
+            BigInteger signerSerialNumber = signerCertificate.getSerialNumber();
+            
+            X500Name signeeName = currentCSR.getSubject();
+            SubjectPublicKeyInfo signeePublicKeyInfo = currentCSR.getSubjectPublicKeyInfo();
+            
+            X509v3CertificateBuilder builder = new X509v3CertificateBuilder(signerName, signerSerialNumber, super.access.getNotBefore(), super.access.getNotAfter(), signeeName, signeePublicKeyInfo);
+
+            ContentSigner signer = new JcaContentSignerBuilder(string2).build(signerPrivateKey);
+            X509CertificateHolder holder = builder.build(signer);
+
+            byte[] holderEncoded = holder.toASN1Structure().getEncoded();
+            
+            
+            CMSSignedDataGenerator generator = new CMSSignedDataGenerator();
+            generator.addSignerInfoGenerator(new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().build()).build(signer, signerCertificate));
+            
+            generator.addCertificate(new X509CertificateHolder(signerCertificate.getEncoded()));
+            
+            CMSTypedData content = new CMSProcessableByteArray(holderEncoded); 
+            CMSSignedData signedData = generator.generate(content, true);
+            
+            
+            ByteArrayOutputStream byteOutputStream = new ByteArrayOutputStream();
+            FileOutputStream outputStream = new FileOutputStream(string);
+           
+            byteOutputStream.write("-----BEGIN PKCS #7 SIGNED DATA-----\n".getBytes("ISO-8859-1"));
+            byteOutputStream.write(Base64.encode(signedData.getEncoded()));
+            byteOutputStream.write("-----END PKCS #7 SIGNED DATA-----\n".getBytes("ISO-8859-1"));
+
+            
+            byteOutputStream.writeTo(outputStream);
+            outputStream.close();
+            return true;
+            
+        } catch (Exception ex) {
+            return false;
+        }
         
-        return false;
     }
 
     @Override
     public boolean importCAReply(String string, String string1) {
         
-        return false;
+        try {
+            
+            X509Certificate signerCertificate = (X509Certificate) keyStore.getCertificate(string1);
+            
+            
+            
+            return true;
+        } catch (KeyStoreException ex) {
+            return false;
+        }
     }
 
     @Override
