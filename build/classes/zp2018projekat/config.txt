@@ -1,4 +1,5 @@
 DSA
+RSA
 key usage
 issuer alternative name
 basic constraints
