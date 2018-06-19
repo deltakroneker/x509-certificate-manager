@@ -104,7 +104,6 @@ import x509.v3.GuiV3;
 public class MyCode extends x509.v3.CodeV3 {
 
     private KeyStore keyStore;
-    private String aliasOfCSRIssuer;
     private PKCS10CertificationRequest currentCSR;
 
     public MyCode(boolean[] algorithm_conf, boolean[] extensions_conf, boolean extensions_rules) throws GuiException {
@@ -535,47 +534,13 @@ public class MyCode extends x509.v3.CodeV3 {
 
     @Override
     public boolean importCertificate(String string, String string1) {
-//        
-//        Certificate certificate;
-//        Certificate[] chainOfCertificates;
-//        Reader reader;
-//        PemWriter PEMWriter;
-//        FileInputStream inputStream;
-//        char[] filePath = string.toCharArray();
-//        String filePathWithCer = string;
-//        
-//        try {
-//            certificate = this.keyStore.getCertificate(string1);
-//            if (!(filePath[filePath.length - 4] == '.' && filePath[filePath.length - 3] == 'c' && filePath[filePath.length - 2] == 'e' && filePath[filePath.length - 1] == 'r'))
-//                filePathWithCer += ".cer";
-//            reader = new FileReader(filePathWithCer);
-//            
-//            PEMParser parser = new PEMParser(reader);
-//            Object parsedObj = parser.readObject();
-//            
-//            
-//            if (i == 0) {
-//                byte[] buffer = certificate.getEncoded();
-//                outputStream = new FileOutputStream(filePathWithCer);
-//                outputStream.write(buffer);
-//                outputStream.close();
-//            } else {
-//                PEMWriter = new JcaPEMWriter(writer);
-//                if (i1 == 0){
-//                    PEMWriter.writeObject((PemObjectGenerator) certificate);
-//                } else {
-//                    chainOfCertificates = this.keyStore.getCertificateChain(string1);
-//                    for (Certificate cert : chainOfCertificates)
-//                        PEMWriter.writeObject((PemObjectGenerator) cert);
-//                }
-//                PEMWriter.flush();
-//                PEMWriter.close();
-//            }
-//            return true;
-//        } catch (Exception ex) {
-//            return false;
-//        }
-        return false;
+        try {
+            X509Certificate certificate = (X509Certificate) CertificateFactory.getInstance("X.509", "BC").generateCertificate(new FileInputStream(string));
+            keyStore.setCertificateEntry(string1, certificate);
+            return true;
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     @Override
@@ -584,7 +549,7 @@ public class MyCode extends x509.v3.CodeV3 {
         Certificate certificate;
         Certificate[] chainOfCertificates;
         Writer writer;
-        PemWriter PEMWriter;
+        JcaPEMWriter PEMWriter;
         FileOutputStream outputStream;
         char[] filePath = string.toCharArray();
         String filePathWithCer = string;
@@ -603,11 +568,11 @@ public class MyCode extends x509.v3.CodeV3 {
             } else {
                 PEMWriter = new JcaPEMWriter(writer);
                 if (i1 == 0){
-                    PEMWriter.writeObject((PemObjectGenerator) certificate);
+                    PEMWriter.writeObject(certificate);
                 } else {
                     chainOfCertificates = this.keyStore.getCertificateChain(string1);
                     for (Certificate cert : chainOfCertificates)
-                        PEMWriter.writeObject((PemObjectGenerator) cert);
+                        PEMWriter.writeObject(cert);
                 }
                 PEMWriter.flush();
                 PEMWriter.close();
@@ -699,7 +664,7 @@ public class MyCode extends x509.v3.CodeV3 {
             Date notAfter = access.getNotAfter();
             BigInteger serialNumber = new BigInteger(access.getSerialNumber());
             
-            X509v3CertificateBuilder certgen = new X509v3CertificateBuilder(caHolder.getIssuer(), serialNumber, notBefore, notAfter, currentCSR.getSubject(),currentCSR.getSubjectPublicKeyInfo());
+            X509v3CertificateBuilder certgen = new X509v3CertificateBuilder(caHolder.getSubject(), serialNumber, notBefore, notAfter, currentCSR.getSubject(),currentCSR.getSubjectPublicKeyInfo());
             
             // Extension: key usage
             boolean[] keyUsageArray = super.access.getKeyUsage();
@@ -786,22 +751,19 @@ public class MyCode extends x509.v3.CodeV3 {
             cmsSignedDataGenerator.addCertificate(holder);
             
             java.security.cert.Certificate[] certArray = keyStore.getCertificateChain(string1);
-            for(java.security.cert.Certificate certInstance: certArray){
-                X509Certificate x509 = (X509Certificate) certInstance;
-                X509CertificateHolder hold = new JcaX509CertificateHolder(x509);
-                cmsSignedDataGenerator.addCertificate(hold);
-            }
             
-            CMSTypedData chainMessage = new CMSProcessableByteArray(certencoded);            
             FileOutputStream out = new FileOutputStream(string);
             JcaPEMWriter pemWriter = new JcaPEMWriter(new OutputStreamWriter(out));
             
             JcaX509CertificateConverter jcaConverter = new JcaX509CertificateConverter();
             X509Certificate outCert = jcaConverter.getCertificate(holder);
-            pemWriter.writeObject(outCert);
-            pemWriter.writeObject(caHolder);
-            pemWriter.close();
             
+            pemWriter.writeObject(outCert);
+            for (java.security.cert.Certificate certInstance : certArray) {
+                pemWriter.writeObject(certInstance);
+            }
+            
+            pemWriter.close();
             return true;
             
         } catch (Exception ex) {
